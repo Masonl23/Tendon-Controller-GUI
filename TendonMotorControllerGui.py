@@ -22,7 +22,6 @@ import time
 
 # logging stuff
 import logging
-
 logging.basicConfig(level=logging.DEBUG)
 
 
