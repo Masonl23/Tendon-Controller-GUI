@@ -45,12 +45,8 @@ class Widget(QWidget):
         # add mapped instruction box
         self.add_allMotor_and_instruction_box()
 
-
-
         # set final layout
         self.setLayout(self.mainVerticalLayout)
-        # self.motorAngleSliders[0].setSliderPosition()
-
     # ---------------------------------------------------------------------------------
     # adding layouts
     def add_serial_layout(self):
