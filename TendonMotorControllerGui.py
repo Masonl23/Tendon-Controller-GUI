@@ -27,6 +27,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 class Widget(QWidget):
     def __init__(self):
+
         QWidget.__init__(self)
         self.setGeometry(0, 0, 400, 400)
         self.setWindowTitle("Tendon Motor Controller")
@@ -44,13 +45,7 @@ class Widget(QWidget):
         # add mapped instruction box
         self.add_allMotor_and_instruction_box()
 
-        # connect search serial button
-        self.searchSerialPortPB.pressed.connect(self.searchSerialPB_callback)
-        self.serialObj = None
-        self.isSerialObjConnected = False
 
-        # connect connectSerialButton
-        self.connectSerialPB.pressed.connect(self.connectSerialPB_callback)
 
         # set final layout
         self.setLayout(self.mainVerticalLayout)
@@ -90,6 +85,14 @@ class Widget(QWidget):
 
         # push box to main layout
         self.mainVerticalLayout.addWidget(serialGB)
+
+        # connect callbacks
+        self.searchSerialPortPB.pressed.connect(self.searchSerialPB_callback)
+        self.serialObj = None
+        self.isSerialObjConnected = False
+        
+        # connect connectSerialButton
+        self.connectSerialPB.pressed.connect(self.connectSerialPB_callback)
 
     def add_indiviual_motor_control_box(self):
         """Adds individual motor control box"""
@@ -587,26 +590,26 @@ class Widget(QWidget):
 
     def writeSerialData(self):
         """Sends data to microcontroller via serial port"""
-        logging.info(f"SENT serial {int(time.time()*1000.0)}")
-        # if self.serialObj is not None and self.serialObj.is_open:
-        # dataStr = self.getSerialWriteString()
-        # self.serialObj.write(dataStr)
+        if self.serialObj is not None and self.serialObj.is_open:
+            dataStr = self.getSerialWriteString()
+            self.serialObj.write(dataStr)
+            logging.info(f"SENT serial {int(time.time()*1000.0)}")
 
     def getSerialWriteString(self):
         """Gets the angles of each spinner and makes into string
         that can be sent"""
         dataStr = (
-            str(self.motorDials[0].value()).encode()
+            str(self.motorAngleSB[0].value()).encode()
             + b" "
-            + str(self.motorDials[1].value()).encode()
+            + str(self.motorAngleSB[1].value()).encode()
             + b" "
-            + str(self.motorDials[2].value()).encode()
+            + str(self.motorAngleSB[2].value()).encode()
             + b" "
-            + str(self.motorDials[3].value()).encode()
+            + str(self.motorAngleSB[3].value()).encode()
             + b" "
-            + str(self.motorDials[4].value()).encode()
+            + str(self.motorAngleSB[4].value()).encode()
             + b" "
-            + str(self.motorDials[5].value()).encode()
+            + str(self.motorAngleSB[5].value()).encode()
             + b" \r"
         )
         return dataStr
