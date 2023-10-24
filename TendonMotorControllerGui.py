@@ -459,7 +459,7 @@ class Widget(QWidget):
             self.motorAngleSliders[index].setValue(int(self.motorAngleSB[index].value()))
             logging.debug("slider value chagned")
             # self.motorAngleSliders[index].setSliderPosition(int(self.motorAngleSB[index].value()))
-            self.writeSerialData()
+            self.writeIndividualSerialData()
 
     def motorAngleSliders_valueChanged_callback(self, index):
         """When value is changed this gets called"""
@@ -467,7 +467,7 @@ class Widget(QWidget):
         if self.motorAngleSliders[index].value() != self.motorAngleSB[index].value():
             self.motorAngleSB[index].setValue(int(self.motorAngleSliders[index].value()))
             logging.debug("SB value chagned")
-            self.writeSerialData()
+            self.writeIndividualSerialData()
 
     def minMotorAngleSB_editingFinished_callback(self, index):
         """When min limits are changed"""
@@ -506,12 +506,14 @@ class Widget(QWidget):
         if self.allMotorAngleSB.value() != self.allMotorAngleSlider.value():
             self.allMotorAngleSlider.setValue(self.allMotorAngleSB.value())
             logging.debug("allMotorAngleSB called")
+            self.writeAllSerialData()
 
     def allMotorAngleSlider_valueChanged_callback(self):
         """when slider value is changed"""
         if self.allMotorAngleSB.value() != self.allMotorAngleSlider.value():
             self.allMotorAngleSB.setValue(self.allMotorAngleSlider.value())
             logging.debug("allMotorAngleSlider called")
+            self.writeAllSerialData()
 
     def allMinMotorAngleSB_editingFinished_callback(self):
         """when all min value changes"""
@@ -588,12 +590,18 @@ class Widget(QWidget):
 
             logging.debug("serial disconnected")
 
-    def writeSerialData(self):
+    def writeIndividualSerialData(self):
         """Sends data to microcontroller via serial port"""
         if self.serialObj is not None and self.serialObj.is_open:
             dataStr = self.getSerialWriteString()
             self.serialObj.write(dataStr)
-            logging.info(f"SENT serial {int(time.time()*1000.0)}")
+            logging.info(f"sent individual serial data")
+
+    def writeAllSerialData(self):
+        if self.serialObj is not None and self.serialObj.is_open:
+            dataStr = b"all " + str(self.allMotorAngleSB.value()).encode() + b" \r"
+            self.serialObj.write(dataStr)
+            logging.info(f"Sent all serial data")
 
     def getSerialWriteString(self):
         """Gets the angles of each spinner and makes into string
