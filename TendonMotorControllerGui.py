@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QApplication,
     QWidget,
     QLayout,
@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
     QTableWidget,
     QCheckBox,
 )
-from PyQt5.QtCore import Qt, QFile, QTextStream
+from PyQt6.QtCore import Qt, QFile, QTextStream
 import sys
 import serial
 import serial.tools.list_ports
@@ -54,7 +54,7 @@ class Widget(QWidget):
 
         # set final layout
         self.setLayout(self.mainVerticalLayout)
-        self.setNewMotorZeroPB
+        # self.motorAngleSliders[0].setSliderPosition()
 
     # ---------------------------------------------------------------------------------
     # adding layouts
@@ -453,15 +453,16 @@ class Widget(QWidget):
         """Sets the slider and spin box values to 0"""
         # this prevents double calling since SB and slider and connected together
         if self.motorAngleSliders[index].value() != self.motorAngleSB[index].value():
-            self.motorAngleSliders[index].setValue(self.motorAngleSB[index].value())
+            self.motorAngleSliders[index].setValue(int(self.motorAngleSB[index].value()))
             logging.debug("slider value chagned")
+            # self.motorAngleSliders[index].setSliderPosition(int(self.motorAngleSB[index].value()))
             self.writeSerialData()
 
     def motorAngleSliders_valueChanged_callback(self, index):
         """When value is changed this gets called"""
         # this prevents double calling since SB and slider are connected together
         if self.motorAngleSliders[index].value() != self.motorAngleSB[index].value():
-            self.motorAngleSB[index].setValue(self.motorAngleSliders[index].value())
+            self.motorAngleSB[index].setValue(int(self.motorAngleSliders[index].value()))
             logging.debug("SB value chagned")
             self.writeSerialData()
 
@@ -621,6 +622,7 @@ class Widget(QWidget):
 
 
 
+
     def closeEvent(self, event):
         """When QtPy gets the request to close window, function makes sure
         the serial port and thread get closed safely"""
@@ -640,4 +642,4 @@ if __name__ == "__main__":
     widget = Widget()
     widget.show()
 
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
