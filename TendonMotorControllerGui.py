@@ -1,3 +1,4 @@
+import typing
 from PyQt6.QtWidgets import (
     QApplication,
     QWidget,
@@ -14,6 +15,7 @@ from PyQt6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QCheckBox,
+    QAbstractItemView,
 )
 from PyQt6.QtCore import Qt, QFile, QTextStream, QThread, pyqtSignal,QObject
 import sys
@@ -29,7 +31,11 @@ logging.basicConfig(level=logging.DEBUG)
 
 class Widget(QWidget):
     
+    # thread stuff
     serialThread = None
+    instructionThread = None
+    instructionThreadRunning = False
+    
     def __init__(self):
         QWidget.__init__(self)
         self.setGeometry(0, 0, 400, 400)
@@ -357,6 +363,7 @@ class Widget(QWidget):
         self.inputT = QTableWidget()
         self.inputT.setRowCount(1)
         self.inputT.setColumnCount(6)
+        self.inputT.setDragDropMode(QAbstractItemView.DragDropMode.DragDrop)
         for i in range(6):
             intNum = QTableWidgetItem()
             intNum.setData(0,0)
@@ -372,23 +379,38 @@ class Widget(QWidget):
 
         # settings group box
         buttonGB = QGroupBox("Settings")
-        buttonGB.setFixedWidth(100)
+        # buttonGB.setFixedWidth(100)
         buttonVLay = QVBoxLayout()
 
         # start button
         self.startInstPB = QPushButton("Start")
+        self.startInstPB.pressed.connect(self.startInstPB_pressed_callback)
+        self.startInstPB.setToolTip("runs through defined angles")
         buttonVLay.addWidget(self.startInstPB)
 
         # time between instructions time
         self.timeStepSB = QSpinBox()
         self.timeStepSB.setSuffix(" hz")
+        self.timeStepSB.setValue(1)
+        self.timeStepSB.setToolTip("frequency motors change position")
         buttonVLay.addWidget(self.timeStepSB)
 
         # add row button
         self.addRowPB = QPushButton("Add")
         self.addRowPB.pressed.connect(self.addRowPB_pressed_callback)
-        
+        self.addRowPB.setToolTip("add new row to instruction table")
         buttonVLay.addWidget(self.addRowPB)
+        
+        # duplicate row button
+        self.duplicateRowPB = QPushButton("Duplicate")
+        self.duplicateRowPB.setToolTip("Duplicates highlighted row")
+        buttonVLay.addWidget(self.duplicateRowPB)
+        
+        # copy current angles
+        self.copyCurAnglesPB = QPushButton("Copy Current Angles")
+        self.copyCurAnglesPB.setToolTip("copies current angles into row")
+        self.copyCurAnglesPB.pressed.connect(self.copyCurAnglesPB_pressed_callback)
+        buttonVLay.addWidget(self.copyCurAnglesPB)
 
         # remove row button
         self.removeRowPB = QPushButton("Remove")
@@ -451,44 +473,20 @@ class Widget(QWidget):
         )
 
         # connect zero value button
-        self.setMotorAngleZeroPB[0].pressed.connect(
-            lambda: self.motorAngleSliders[0].setValue(0)
-        )
-        self.setMotorAngleZeroPB[1].pressed.connect(
-            lambda: self.motorAngleSliders[1].setValue(0)
-        )
-        self.setMotorAngleZeroPB[2].pressed.connect(
-            lambda: self.motorAngleSliders[2].setValue(0)
-        )
-        self.setMotorAngleZeroPB[3].pressed.connect(
-            lambda: self.motorAngleSliders[3].setValue(0)
-        )
-        self.setMotorAngleZeroPB[4].pressed.connect(
-            lambda: self.motorAngleSliders[4].setValue(0)
-        )
-        self.setMotorAngleZeroPB[5].pressed.connect(
-            lambda: self.motorAngleSliders[5].setValue(0)
-        )
+        self.setMotorAngleZeroPB[0].pressed.connect(lambda: self.setMotorAngleZeroPB_pressed_callback(0))
+        self.setMotorAngleZeroPB[1].pressed.connect(lambda: self.setMotorAngleZeroPB_pressed_callback(1))
+        self.setMotorAngleZeroPB[2].pressed.connect(lambda: self.setMotorAngleZeroPB_pressed_callback(2))
+        self.setMotorAngleZeroPB[3].pressed.connect(lambda: self.setMotorAngleZeroPB_pressed_callback(3))
+        self.setMotorAngleZeroPB[4].pressed.connect(lambda: self.setMotorAngleZeroPB_pressed_callback(4))
+        self.setMotorAngleZeroPB[5].pressed.connect(lambda: self.setMotorAngleZeroPB_pressed_callback(5))
 
         # connect max value button
-        self.setMotorAngleMaxPB[0].pressed.connect(
-            lambda: self.motorAngleSliders[0].setValue(self.maxMotorAngleSB[0].value())
-        )
-        self.setMotorAngleMaxPB[1].pressed.connect(
-            lambda: self.motorAngleSliders[1].setValue(self.maxMotorAngleSB[1].value())
-        )
-        self.setMotorAngleMaxPB[2].pressed.connect(
-            lambda: self.motorAngleSliders[2].setValue(self.maxMotorAngleSB[2].value())
-        )
-        self.setMotorAngleMaxPB[3].pressed.connect(
-            lambda: self.motorAngleSliders[3].setValue(self.maxMotorAngleSB[3].value())
-        )
-        self.setMotorAngleMaxPB[4].pressed.connect(
-            lambda: self.motorAngleSliders[4].setValue(self.maxMotorAngleSB[4].value())
-        )
-        self.setMotorAngleMaxPB[5].pressed.connect(
-            lambda: self.motorAngleSliders[5].setValue(self.maxMotorAngleSB[5].value())
-        )
+        self.setMotorAngleMaxPB[0].pressed.connect(lambda: self.motorAngleSliders[0].setValue(self.maxMotorAngleSB[0].value()))
+        self.setMotorAngleMaxPB[1].pressed.connect(lambda: self.motorAngleSliders[1].setValue(self.maxMotorAngleSB[1].value()))
+        self.setMotorAngleMaxPB[2].pressed.connect(lambda: self.motorAngleSliders[2].setValue(self.maxMotorAngleSB[2].value()))
+        self.setMotorAngleMaxPB[3].pressed.connect(lambda: self.motorAngleSliders[3].setValue(self.maxMotorAngleSB[3].value()))
+        self.setMotorAngleMaxPB[4].pressed.connect(lambda: self.motorAngleSliders[4].setValue(self.maxMotorAngleSB[4].value()))
+        self.setMotorAngleMaxPB[5].pressed.connect(lambda: self.motorAngleSliders[5].setValue(self.maxMotorAngleSB[5].value()))
 
         # connect min value button
         self.setMotorAngleMinPB[0].pressed.connect(
@@ -599,6 +597,12 @@ class Widget(QWidget):
         self.motorAngleSB[index].setMinimum(self.minMotorAngleSB[index].value())
         self.motorAngleSliders[index].setMinimum(self.minMotorAngleSB[index].value())
 
+    def setMotorAngleZeroPB_pressed_callback(self,index):
+        """checks to see if 0 is possible otherwise idk"""
+        logging.debug("setMotorAngleZeroPB called")
+        if self.minMotorAngleSB[index].value() < 0 and self.maxMotorAngleSB[index].value() > 0:
+            self.motorAngleSB[index].setValue(0)
+
     def maxMotorAngleSB_editingFinished_callback(self, index):
         """When max limits are changed"""
         logging.debug(f"maxMotorAngleSB called: {index}")
@@ -650,7 +654,10 @@ class Widget(QWidget):
         self.allMotorAngleSB.setMaximum(self.allMaxMotorAngleSB.value())
         self.allMotorAngleSlider.setMaximum(self.allMaxMotorAngleSB.value())
 
+    # ---------------------------------------------------------------------------------
+    # instruction table stuff
     def addRowPB_pressed_callback(self):
+        """Adds new row to inputT, making the new table all 0's"""
         rows = self.inputT.rowCount()+1
         self.inputT.setRowCount(rows)
         self.inputT.update()
@@ -660,6 +667,44 @@ class Widget(QWidget):
             self.inputT.setItem(rows-1,i,intNum)
         logging.debug(f"inputT rows {rows}")
         
+    def startInstPB_pressed_callback(self):
+        """processes input table for usable data and sends to microcontroller"""
+        logging.debug("startInstPB callback")
+        if self.serialObj is not None and self.serialObj.is_open:
+            if not self.instructionThreadRunning:
+                dataArray = []
+                for row in range(self.inputT.rowCount()):
+                    rowStr = ""
+                    for col in range(6):
+                        curItem = self.inputT.item(row,col)
+                        rowStr += curItem.text()
+                        if col != 5:
+                            rowStr+=" "
+                    rowStr += "\r"
+
+                    dataArray.append(rowStr.encode())
+                # print(dataArray)
+                self.instructionThread = RunInstructionsThread(dataArray,self.timeStepSB.value(),self.serialObj)
+                self.instructionThread.start()
+                self.instructionThreadRunning = True
+                self.startInstPB.setText("Stop")
+            else:
+                self.instructionThreadRunning = False
+                self.startInstPB.setText("Start")
+                if self.instructionThread is not None and self.instructionThread.isRunning():
+                    self.instructionThread.stop()
+                
+    def copyCurAnglesPB_pressed_callback(self):
+        """Copies the current angles into table row"""
+        logging.debug("copyCurAnglesPB called")
+        rows = self.inputT.rowCount()+1
+        self.inputT.setRowCount(rows)
+        self.inputT.update()
+        for i in range(6):
+            intNum = QTableWidgetItem()
+            intNum.setData(0,self.motorAngleSB[i].value())
+            self.inputT.setItem(rows-1,i,intNum)
+            
         
     # ---------------------------------------------------------------------------------
     # serial stuff
@@ -721,7 +766,9 @@ class Widget(QWidget):
             # stop thread if running
             if self.serialThread is not None and self.serialThread.isRunning():
                 self.serialThread.stop()
-                # ...
+
+            if self.instructionThread is not None and self.instructionThread.isRunning():
+                self.instructionThread.stop()
 
             # close port
             if self.serialObj is not None:
@@ -803,16 +850,42 @@ class ReadSerialThread(QThread):
         self.serialObj = serialDev
 
     def run(self):
+        logging.debug("ReadSerialThread starting")
         while self.runThread and self.serialObj.is_open:
             data = self.serialObj.readline().decode()
             # print(data)
             self.serialData.emit(data)
-        logging.debug("EXITING READ SERIAL THREAD")
+        logging.debug("ReadSerialThread exiting")
                 
     def stop(self):
         self.runThread = False
         self.terminate()
 
+class RunInstructionsThread(QThread):
+    def __init__(self,dataArray,freq,serialObj):
+        QThread.__init__(self)
+        self.data = dataArray
+        self.timeBetween = 1/freq
+        self.runThread = True
+        self.curIndex = 0
+        self.maxIndex = len(dataArray)
+        self.serialObj = serialObj
+        
+    def run(self):
+        logging.debug("RunInstructionsThread starting")
+        while self.runThread:
+            self.serialObj.write(self.data[self.curIndex])
+            self.curIndex+=1
+            if self.curIndex >= self.maxIndex:
+                self.curIndex = 0
+            
+            time.sleep(self.timeBetween)
+            
+        logging.debug("RunInstructionsThread exiting")
+        
+    def stop(self):
+        self.runThread = False
+        self.terminate()
 
 if __name__ == "__main__":
     app = QApplication([])
