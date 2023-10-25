@@ -12,9 +12,10 @@ from PyQt6.QtWidgets import (
     QSpinBox,
     QTextEdit,
     QTableWidget,
+    QTableWidgetItem,
     QCheckBox,
 )
-from PyQt6.QtCore import Qt, QFile, QTextStream
+from PyQt6.QtCore import Qt, QFile, QTextStream, QThread, pyqtSignal,QObject
 import sys
 import serial
 import serial.tools.list_ports
@@ -22,12 +23,14 @@ import time
 
 # logging stuff
 import logging
+
 logging.basicConfig(level=logging.DEBUG)
 
 
 class Widget(QWidget):
+    
+    serialThread = None
     def __init__(self):
-
         QWidget.__init__(self)
         self.setGeometry(0, 0, 400, 400)
         self.setWindowTitle("Tendon Motor Controller")
@@ -47,6 +50,7 @@ class Widget(QWidget):
 
         # set final layout
         self.setLayout(self.mainVerticalLayout)
+
     # ---------------------------------------------------------------------------------
     # adding layouts
     def add_serial_layout(self):
@@ -86,7 +90,7 @@ class Widget(QWidget):
         self.searchSerialPortPB.pressed.connect(self.searchSerialPB_callback)
         self.serialObj = None
         self.isSerialObjConnected = False
-        
+
         # connect connectSerialButton
         self.connectSerialPB.pressed.connect(self.connectSerialPB_callback)
 
@@ -315,25 +319,48 @@ class Widget(QWidget):
 
         # connect callbacks
         #   slider and spinbox value changes
-        self.allMotorAngleSB.editingFinished.connect( self.allMotorAngleSB_editingFinished_callback)
-        self.allMotorAngleSlider.valueChanged.connect( self.allMotorAngleSlider_valueChanged_callback)
+        self.allMotorAngleSB.editingFinished.connect(
+            self.allMotorAngleSB_editingFinished_callback
+        )
+        self.allMotorAngleSlider.valueChanged.connect(
+            self.allMotorAngleSlider_valueChanged_callback
+        )
         #   max min zero buttons
-        self.setAllMotorsAngleZeroPB.pressed.connect( lambda: self.allMotorAngleSlider.setValue(0))
-        self.setAllMotorsAngleMaxPB.pressed.connect( lambda: self.allMotorAngleSlider.setValue(self.allMaxMotorAngleSB.value()))
-        self.setAllMotorsAngleMinPB.pressed.connect( lambda: self.allMotorAngleSlider.setValue(self.allMinMotorAngleSB.value()))
+        self.setAllMotorsAngleZeroPB.pressed.connect(
+            lambda: self.allMotorAngleSlider.setValue(0)
+        )
+        self.setAllMotorsAngleMaxPB.pressed.connect(
+            lambda: self.allMotorAngleSlider.setValue(self.allMaxMotorAngleSB.value())
+        )
+        self.setAllMotorsAngleMinPB.pressed.connect(
+            lambda: self.allMotorAngleSlider.setValue(self.allMinMotorAngleSB.value())
+        )
         # limits change
-        self.allMaxMotorAngleSB.editingFinished.connect( self.allMaxMotorAngleSB_editingFinished_callback)
-        self.allMinMotorAngleSB.editingFinished.connect( self.allMinMotorAngleSB_editingFinished_callback)
+        self.allMaxMotorAngleSB.editingFinished.connect(
+            self.allMaxMotorAngleSB_editingFinished_callback
+        )
+        self.allMinMotorAngleSB.editingFinished.connect(
+            self.allMinMotorAngleSB_editingFinished_callback
+        )
 
         # ----------------------------------------------------
         instGB = QGroupBox("Instructions")
         instHLay = QHBoxLayout()
 
-        # self.inputTE = QTextEdit("Write stuff")
-        # instHLay.addWidget(self.inputTE)
+        # serial ouput
+        self.serialOutputTE = QTextEdit()
+        self.serialOutputTE.setFixedWidth(300)
+        self.serialOutputTE.setFixedHeight(275)
+        instHLay.addWidget(self.serialOutputTE)
+        
+        # yaml instructions
         self.inputT = QTableWidget()
         self.inputT.setRowCount(1)
         self.inputT.setColumnCount(6)
+        for i in range(6):
+            intNum = QTableWidgetItem()
+            intNum.setData(0,0)
+            self.inputT.setItem(0,i,intNum)
 
         # set column widths
         widthVal = 60
@@ -354,14 +381,13 @@ class Widget(QWidget):
 
         # time between instructions time
         self.timeStepSB = QSpinBox()
-        self.timeStepSB.setSuffix(" s")
+        self.timeStepSB.setSuffix(" hz")
         buttonVLay.addWidget(self.timeStepSB)
 
         # add row button
         self.addRowPB = QPushButton("Add")
-        self.addRowPB.pressed.connect(
-            lambda: self.inputT.setRowCount(self.inputT.rowCount() + 1)
-        )
+        self.addRowPB.pressed.connect(self.addRowPB_pressed_callback)
+        
         buttonVLay.addWidget(self.addRowPB)
 
         # remove row button
@@ -385,74 +411,172 @@ class Widget(QWidget):
         """Connects value changed slider and spinbox"""
 
         # connects slider changed to spinbox
-        self.motorAngleSliders[0].valueChanged.connect(lambda: self.motorAngleSliders_valueChanged_callback(0))
-        self.motorAngleSliders[1].valueChanged.connect(lambda: self.motorAngleSliders_valueChanged_callback(1))
-        self.motorAngleSliders[2].valueChanged.connect(lambda: self.motorAngleSliders_valueChanged_callback(2))
-        self.motorAngleSliders[3].valueChanged.connect(lambda: self.motorAngleSliders_valueChanged_callback(3))
-        self.motorAngleSliders[4].valueChanged.connect(lambda: self.motorAngleSliders_valueChanged_callback(4))
-        self.motorAngleSliders[5].valueChanged.connect(lambda: self.motorAngleSliders_valueChanged_callback(5))
+        self.motorAngleSliders[0].valueChanged.connect(
+            lambda: self.motorAngleSliders_valueChanged_callback(0)
+        )
+        self.motorAngleSliders[1].valueChanged.connect(
+            lambda: self.motorAngleSliders_valueChanged_callback(1)
+        )
+        self.motorAngleSliders[2].valueChanged.connect(
+            lambda: self.motorAngleSliders_valueChanged_callback(2)
+        )
+        self.motorAngleSliders[3].valueChanged.connect(
+            lambda: self.motorAngleSliders_valueChanged_callback(3)
+        )
+        self.motorAngleSliders[4].valueChanged.connect(
+            lambda: self.motorAngleSliders_valueChanged_callback(4)
+        )
+        self.motorAngleSliders[5].valueChanged.connect(
+            lambda: self.motorAngleSliders_valueChanged_callback(5)
+        )
 
         # connects spin box
-        self.motorAngleSB[0].editingFinished.connect(lambda: self.motorAngleSB_editingFinished_callback(0))
-        self.motorAngleSB[1].editingFinished.connect(lambda: self.motorAngleSB_editingFinished_callback(1))
-        self.motorAngleSB[2].editingFinished.connect(lambda: self.motorAngleSB_editingFinished_callback(2))
-        self.motorAngleSB[3].editingFinished.connect(lambda: self.motorAngleSB_editingFinished_callback(3))
-        self.motorAngleSB[4].editingFinished.connect(lambda: self.motorAngleSB_editingFinished_callback(4))
-        self.motorAngleSB[5].editingFinished.connect(lambda: self.motorAngleSB_editingFinished_callback(5))
+        self.motorAngleSB[0].editingFinished.connect(
+            lambda: self.motorAngleSB_editingFinished_callback(0)
+        )
+        self.motorAngleSB[1].editingFinished.connect(
+            lambda: self.motorAngleSB_editingFinished_callback(1)
+        )
+        self.motorAngleSB[2].editingFinished.connect(
+            lambda: self.motorAngleSB_editingFinished_callback(2)
+        )
+        self.motorAngleSB[3].editingFinished.connect(
+            lambda: self.motorAngleSB_editingFinished_callback(3)
+        )
+        self.motorAngleSB[4].editingFinished.connect(
+            lambda: self.motorAngleSB_editingFinished_callback(4)
+        )
+        self.motorAngleSB[5].editingFinished.connect(
+            lambda: self.motorAngleSB_editingFinished_callback(5)
+        )
 
         # connect zero value button
-        self.setMotorAngleZeroPB[0].pressed.connect(lambda: self.motorAngleSliders[0].setValue(0))
-        self.setMotorAngleZeroPB[1].pressed.connect(lambda: self.motorAngleSliders[1].setValue(0))
-        self.setMotorAngleZeroPB[2].pressed.connect(lambda: self.motorAngleSliders[2].setValue(0))
-        self.setMotorAngleZeroPB[3].pressed.connect(lambda: self.motorAngleSliders[3].setValue(0))
-        self.setMotorAngleZeroPB[4].pressed.connect(lambda: self.motorAngleSliders[4].setValue(0))
-        self.setMotorAngleZeroPB[5].pressed.connect(lambda: self.motorAngleSliders[5].setValue(0))
+        self.setMotorAngleZeroPB[0].pressed.connect(
+            lambda: self.motorAngleSliders[0].setValue(0)
+        )
+        self.setMotorAngleZeroPB[1].pressed.connect(
+            lambda: self.motorAngleSliders[1].setValue(0)
+        )
+        self.setMotorAngleZeroPB[2].pressed.connect(
+            lambda: self.motorAngleSliders[2].setValue(0)
+        )
+        self.setMotorAngleZeroPB[3].pressed.connect(
+            lambda: self.motorAngleSliders[3].setValue(0)
+        )
+        self.setMotorAngleZeroPB[4].pressed.connect(
+            lambda: self.motorAngleSliders[4].setValue(0)
+        )
+        self.setMotorAngleZeroPB[5].pressed.connect(
+            lambda: self.motorAngleSliders[5].setValue(0)
+        )
 
         # connect max value button
-        self.setMotorAngleMaxPB[0].pressed.connect(lambda: self.motorAngleSliders[0].setValue(self.maxMotorAngleSB[0].value()))
-        self.setMotorAngleMaxPB[1].pressed.connect(lambda: self.motorAngleSliders[1].setValue(self.maxMotorAngleSB[1].value()))
-        self.setMotorAngleMaxPB[2].pressed.connect(lambda: self.motorAngleSliders[2].setValue(self.maxMotorAngleSB[2].value()))
-        self.setMotorAngleMaxPB[3].pressed.connect(lambda: self.motorAngleSliders[3].setValue(self.maxMotorAngleSB[3].value()))
-        self.setMotorAngleMaxPB[4].pressed.connect(lambda: self.motorAngleSliders[4].setValue(self.maxMotorAngleSB[4].value()))
-        self.setMotorAngleMaxPB[5].pressed.connect(lambda: self.motorAngleSliders[5].setValue(self.maxMotorAngleSB[5].value()))
+        self.setMotorAngleMaxPB[0].pressed.connect(
+            lambda: self.motorAngleSliders[0].setValue(self.maxMotorAngleSB[0].value())
+        )
+        self.setMotorAngleMaxPB[1].pressed.connect(
+            lambda: self.motorAngleSliders[1].setValue(self.maxMotorAngleSB[1].value())
+        )
+        self.setMotorAngleMaxPB[2].pressed.connect(
+            lambda: self.motorAngleSliders[2].setValue(self.maxMotorAngleSB[2].value())
+        )
+        self.setMotorAngleMaxPB[3].pressed.connect(
+            lambda: self.motorAngleSliders[3].setValue(self.maxMotorAngleSB[3].value())
+        )
+        self.setMotorAngleMaxPB[4].pressed.connect(
+            lambda: self.motorAngleSliders[4].setValue(self.maxMotorAngleSB[4].value())
+        )
+        self.setMotorAngleMaxPB[5].pressed.connect(
+            lambda: self.motorAngleSliders[5].setValue(self.maxMotorAngleSB[5].value())
+        )
 
         # connect min value button
-        self.setMotorAngleMinPB[0].pressed.connect(lambda: self.motorAngleSliders[0].setValue(self.minMotorAngleSB[0].value()))
-        self.setMotorAngleMinPB[1].pressed.connect(lambda: self.motorAngleSliders[1].setValue(self.minMotorAngleSB[1].value()))
-        self.setMotorAngleMinPB[2].pressed.connect(lambda: self.motorAngleSliders[2].setValue(self.minMotorAngleSB[2].value()))
-        self.setMotorAngleMinPB[3].pressed.connect(lambda: self.motorAngleSliders[3].setValue(self.minMotorAngleSB[3].value()))
-        self.setMotorAngleMinPB[4].pressed.connect(lambda: self.motorAngleSliders[4].setValue(self.minMotorAngleSB[4].value()))
-        self.setMotorAngleMinPB[5].pressed.connect(lambda: self.motorAngleSliders[5].setValue(self.minMotorAngleSB[5].value()))
+        self.setMotorAngleMinPB[0].pressed.connect(
+            lambda: self.motorAngleSliders[0].setValue(self.minMotorAngleSB[0].value())
+        )
+        self.setMotorAngleMinPB[1].pressed.connect(
+            lambda: self.motorAngleSliders[1].setValue(self.minMotorAngleSB[1].value())
+        )
+        self.setMotorAngleMinPB[2].pressed.connect(
+            lambda: self.motorAngleSliders[2].setValue(self.minMotorAngleSB[2].value())
+        )
+        self.setMotorAngleMinPB[3].pressed.connect(
+            lambda: self.motorAngleSliders[3].setValue(self.minMotorAngleSB[3].value())
+        )
+        self.setMotorAngleMinPB[4].pressed.connect(
+            lambda: self.motorAngleSliders[4].setValue(self.minMotorAngleSB[4].value())
+        )
+        self.setMotorAngleMinPB[5].pressed.connect(
+            lambda: self.motorAngleSliders[5].setValue(self.minMotorAngleSB[5].value())
+        )
 
         # connect minAngle spinbox
-        self.minMotorAngleSB[0].editingFinished.connect(lambda: self.minMotorAngleSB_editingFinished_callback(0))
-        self.minMotorAngleSB[1].editingFinished.connect(lambda: self.minMotorAngleSB_editingFinished_callback(1))
-        self.minMotorAngleSB[2].editingFinished.connect(lambda: self.minMotorAngleSB_editingFinished_callback(2))
-        self.minMotorAngleSB[3].editingFinished.connect(lambda: self.minMotorAngleSB_editingFinished_callback(3))
-        self.minMotorAngleSB[4].editingFinished.connect(lambda: self.minMotorAngleSB_editingFinished_callback(4))
-        self.minMotorAngleSB[5].editingFinished.connect(lambda: self.minMotorAngleSB_editingFinished_callback(5))
+        self.minMotorAngleSB[0].editingFinished.connect(
+            lambda: self.minMotorAngleSB_editingFinished_callback(0)
+        )
+        self.minMotorAngleSB[1].editingFinished.connect(
+            lambda: self.minMotorAngleSB_editingFinished_callback(1)
+        )
+        self.minMotorAngleSB[2].editingFinished.connect(
+            lambda: self.minMotorAngleSB_editingFinished_callback(2)
+        )
+        self.minMotorAngleSB[3].editingFinished.connect(
+            lambda: self.minMotorAngleSB_editingFinished_callback(3)
+        )
+        self.minMotorAngleSB[4].editingFinished.connect(
+            lambda: self.minMotorAngleSB_editingFinished_callback(4)
+        )
+        self.minMotorAngleSB[5].editingFinished.connect(
+            lambda: self.minMotorAngleSB_editingFinished_callback(5)
+        )
 
         # connect maxAngle spinbox
-        self.maxMotorAngleSB[0].editingFinished.connect(lambda: self.maxMotorAngleSB_editingFinished_callback(0))
-        self.maxMotorAngleSB[1].editingFinished.connect(lambda: self.maxMotorAngleSB_editingFinished_callback(1))
-        self.maxMotorAngleSB[2].editingFinished.connect(lambda: self.maxMotorAngleSB_editingFinished_callback(2))
-        self.maxMotorAngleSB[3].editingFinished.connect(lambda: self.maxMotorAngleSB_editingFinished_callback(3))
-        self.maxMotorAngleSB[4].editingFinished.connect(lambda: self.maxMotorAngleSB_editingFinished_callback(4))
-        self.maxMotorAngleSB[5].editingFinished.connect(lambda: self.maxMotorAngleSB_editingFinished_callback(5))
+        self.maxMotorAngleSB[0].editingFinished.connect(
+            lambda: self.maxMotorAngleSB_editingFinished_callback(0)
+        )
+        self.maxMotorAngleSB[1].editingFinished.connect(
+            lambda: self.maxMotorAngleSB_editingFinished_callback(1)
+        )
+        self.maxMotorAngleSB[2].editingFinished.connect(
+            lambda: self.maxMotorAngleSB_editingFinished_callback(2)
+        )
+        self.maxMotorAngleSB[3].editingFinished.connect(
+            lambda: self.maxMotorAngleSB_editingFinished_callback(3)
+        )
+        self.maxMotorAngleSB[4].editingFinished.connect(
+            lambda: self.maxMotorAngleSB_editingFinished_callback(4)
+        )
+        self.maxMotorAngleSB[5].editingFinished.connect(
+            lambda: self.maxMotorAngleSB_editingFinished_callback(5)
+        )
 
-        # connect setZero 
-        self.setNewMotorZeroPB[0].pressed.connect(lambda: self.setNewMotorZeroPB_pressed_callback(0))
-        self.setNewMotorZeroPB[1].pressed.connect(lambda: self.setNewMotorZeroPB_pressed_callback(1))
-        self.setNewMotorZeroPB[2].pressed.connect(lambda: self.setNewMotorZeroPB_pressed_callback(2))
-        self.setNewMotorZeroPB[3].pressed.connect(lambda: self.setNewMotorZeroPB_pressed_callback(3))
-        self.setNewMotorZeroPB[4].pressed.connect(lambda: self.setNewMotorZeroPB_pressed_callback(4))
-        self.setNewMotorZeroPB[5].pressed.connect(lambda: self.setNewMotorZeroPB_pressed_callback(5))
+        # connect setZero
+        self.setNewMotorZeroPB[0].pressed.connect(
+            lambda: self.setNewMotorZeroPB_pressed_callback(0)
+        )
+        self.setNewMotorZeroPB[1].pressed.connect(
+            lambda: self.setNewMotorZeroPB_pressed_callback(1)
+        )
+        self.setNewMotorZeroPB[2].pressed.connect(
+            lambda: self.setNewMotorZeroPB_pressed_callback(2)
+        )
+        self.setNewMotorZeroPB[3].pressed.connect(
+            lambda: self.setNewMotorZeroPB_pressed_callback(3)
+        )
+        self.setNewMotorZeroPB[4].pressed.connect(
+            lambda: self.setNewMotorZeroPB_pressed_callback(4)
+        )
+        self.setNewMotorZeroPB[5].pressed.connect(
+            lambda: self.setNewMotorZeroPB_pressed_callback(5)
+        )
 
     def motorAngleSB_editingFinished_callback(self, index):
         """Sets the slider and spin box values to 0"""
         # this prevents double calling since SB and slider and connected together
         if self.motorAngleSliders[index].value() != self.motorAngleSB[index].value():
-            self.motorAngleSliders[index].setValue(int(self.motorAngleSB[index].value()))
+            self.motorAngleSliders[index].setValue(
+                int(self.motorAngleSB[index].value())
+            )
             logging.debug("slider value chagned")
             # self.motorAngleSliders[index].setSliderPosition(int(self.motorAngleSB[index].value()))
             self.writeIndividualSerialData()
@@ -461,7 +585,9 @@ class Widget(QWidget):
         """When value is changed this gets called"""
         # this prevents double calling since SB and slider are connected together
         if self.motorAngleSliders[index].value() != self.motorAngleSB[index].value():
-            self.motorAngleSB[index].setValue(int(self.motorAngleSliders[index].value()))
+            self.motorAngleSB[index].setValue(
+                int(self.motorAngleSliders[index].value())
+            )
             logging.debug("SB value chagned")
             self.writeIndividualSerialData()
 
@@ -481,19 +607,20 @@ class Widget(QWidget):
         self.motorAngleSB[index].setMaximum(self.maxMotorAngleSB[index].value())
         self.motorAngleSliders[index].setMaximum(self.maxMotorAngleSB[index].value())
 
-    def setNewMotorZeroPB_pressed_callback(self,index):
+    def setNewMotorZeroPB_pressed_callback(self, index):
         """User requests that current angle be set as the zero point"""
-        logging.debug(f"setMotorZero {index}")
-        
-        # command microcontroller to make zero
 
+        if self.serialObj is not None and self.serialObj.is_open:
+            logging.debug(f"setMotorZero {index}")
+            # command microcontroller to make zero
+            dataStr = b"zero " + str(index).encode() + b" \r"
+            self.serialObj.write(dataStr)
 
-        # wait for ack
-
-        # set values to zero
-        self.motorAngleSB[index].setValue(0)
-        self.motorAngleSliders[index].setValue(0)
-
+            # set values to zero
+            self.motorAngleSB[index].setValue(0)
+            self.motorAngleSliders[index].setValue(0)
+        else:
+            logging.error("setNewMotorZero failed to send data")
 
     # ---------------------------------------------------------------------------------
     # all motor control callbacks
@@ -523,6 +650,17 @@ class Widget(QWidget):
         self.allMotorAngleSB.setMaximum(self.allMaxMotorAngleSB.value())
         self.allMotorAngleSlider.setMaximum(self.allMaxMotorAngleSB.value())
 
+    def addRowPB_pressed_callback(self):
+        rows = self.inputT.rowCount()+1
+        self.inputT.setRowCount(rows)
+        self.inputT.update()
+        for i in range(6):
+            intNum = QTableWidgetItem()
+            intNum.setData(0,0)
+            self.inputT.setItem(rows-1,i,intNum)
+        logging.debug(f"inputT rows {rows}")
+        
+        
     # ---------------------------------------------------------------------------------
     # serial stuff
     def searchSerialPB_callback(self):
@@ -558,6 +696,9 @@ class Widget(QWidget):
                 self.enableWidgets(True)
 
                 # start seperate thread
+                self.serialThread = ReadSerialThread(self.serialObj)
+                self.serialThread.start()
+                self.serialThread.serialData.connect(self.serialThread_emit_callback)
 
                 # write pretty message
                 logging.debug("serial connected started")
@@ -576,6 +717,11 @@ class Widget(QWidget):
 
             # change text of button to connect again
             self.connectSerialPB.setText("Connect")
+            
+            # stop thread if running
+            if self.serialThread is not None and self.serialThread.isRunning():
+                self.serialThread.stop()
+                # ...
 
             # close port
             if self.serialObj is not None:
@@ -618,6 +764,9 @@ class Widget(QWidget):
         )
         return dataStr
 
+    def serialThread_emit_callback(self,dataIn):
+        self.serialOutputTE.append(dataIn)
+        
     def removeRowPB_callback(self):
         """removes a row from the instruction table (instT)"""
         if self.inputT.rowCount() > 1:
@@ -627,20 +776,42 @@ class Widget(QWidget):
         """enables or disables all the widgets"""
         logging.debug(f"enableWidgets {isEnabled} called")
 
-
-
-
     def closeEvent(self, event):
         """When QtPy gets the request to close window, function makes sure
         the serial port and thread get closed safely"""
         logging.debug("Close event called")
 
+        
+        # close the thread
+        if self.serialThread is not None and self.serialThread.isRunning():
+            self.serialThread.stop()
+            # self.connectSerialPB.click()
+            
         # check if serial object has been created and try to close it
         if self.serialObj is not None:
             self.serialObj.close()
             logging.debug("Serial object is closed")
 
         event.accept()
+
+
+class ReadSerialThread(QThread):
+    serialData = pyqtSignal(str)
+    def __init__(self,serialDev):
+        QThread.__init__(self)
+        self.runThread = True
+        self.serialObj = serialDev
+
+    def run(self):
+        while self.runThread and self.serialObj.is_open:
+            data = self.serialObj.readline().decode()
+            # print(data)
+            self.serialData.emit(data)
+        logging.debug("EXITING READ SERIAL THREAD")
+                
+    def stop(self):
+        self.runThread = False
+        self.terminate()
 
 
 if __name__ == "__main__":
