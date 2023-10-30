@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem,
     QCheckBox,
     QAbstractItemView,
+    QMenu,
 )
 from PyQt6.QtCore import Qt, QFile, QTextStream, QThread, pyqtSignal,QObject
 import sys
@@ -138,15 +139,6 @@ class Widget(QWidget):
             QPushButton("Max"),
         ]
 
-        #  sets value to 0
-        self.setMotorAngleZeroPB = [
-            QPushButton("0"),
-            QPushButton("0"),
-            QPushButton("0"),
-            QPushButton("0"),
-            QPushButton("0"),
-            QPushButton("0"),
-        ]
 
         # set value to min
         self.setMotorAngleMinPB = [
@@ -220,7 +212,6 @@ class Widget(QWidget):
             # min max zero buttons
             self.setMotorAngleMaxPB[i].setToolTip("Set motor angle to max")
             self.setMotorAngleMaxPB[i].setFixedWidth(50)
-            self.setMotorAngleZeroPB[i].setToolTip("Set motor angle to 0")
             self.setMotorAngleMinPB[i].setToolTip("Set motor angle to min")
             self.setNewMotorZeroPB[i].setToolTip(
                 "Tells drive board this is new 0 location"
@@ -240,7 +231,6 @@ class Widget(QWidget):
             controlVLay = QVBoxLayout()
             PBHLay = QHBoxLayout()
             PBHLay.addWidget(self.setMotorAngleMinPB[i])  # min PB
-            PBHLay.addWidget(self.setMotorAngleZeroPB[i])  # zero PB
             PBHLay.addWidget(self.setMotorAngleMaxPB[i])  # max PB
             controlVLay.addLayout(PBHLay)  # add to control layout
             controlVLay.addWidget(self.motorAngleSliders[i])  # add slider
@@ -325,29 +315,17 @@ class Widget(QWidget):
 
         # connect callbacks
         #   slider and spinbox value changes
-        self.allMotorAngleSB.editingFinished.connect(
-            self.allMotorAngleSB_editingFinished_callback
-        )
-        self.allMotorAngleSlider.valueChanged.connect(
-            self.allMotorAngleSlider_valueChanged_callback
-        )
+        self.allMotorAngleSB.editingFinished.connect(self.allMotorAngleSB_editingFinished_callback)
+        self.allMotorAngleSlider.valueChanged.connect(self.allMotorAngleSlider_valueChanged_callback)
+        
         #   max min zero buttons
-        self.setAllMotorsAngleZeroPB.pressed.connect(
-            lambda: self.allMotorAngleSlider.setValue(0)
-        )
-        self.setAllMotorsAngleMaxPB.pressed.connect(
-            lambda: self.allMotorAngleSlider.setValue(self.allMaxMotorAngleSB.value())
-        )
-        self.setAllMotorsAngleMinPB.pressed.connect(
-            lambda: self.allMotorAngleSlider.setValue(self.allMinMotorAngleSB.value())
-        )
+        self.setAllMotorsAngleZeroPB.pressed.connect( lambda: self.allMotorAngleSlider.setValue(0))
+        self.setAllMotorsAngleMaxPB.pressed.connect(lambda: self.allMotorAngleSlider.setValue(self.allMaxMotorAngleSB.value()))
+        self.setAllMotorsAngleMinPB.pressed.connect(lambda: self.allMotorAngleSlider.setValue(self.allMinMotorAngleSB.value()))
+        
         # limits change
-        self.allMaxMotorAngleSB.editingFinished.connect(
-            self.allMaxMotorAngleSB_editingFinished_callback
-        )
-        self.allMinMotorAngleSB.editingFinished.connect(
-            self.allMinMotorAngleSB_editingFinished_callback
-        )
+        self.allMaxMotorAngleSB.editingFinished.connect(self.allMaxMotorAngleSB_editingFinished_callback)
+        self.allMinMotorAngleSB.editingFinished.connect(self.allMinMotorAngleSB_editingFinished_callback)
 
         # ----------------------------------------------------
         instGB = QGroupBox("Instructions")
@@ -363,11 +341,21 @@ class Widget(QWidget):
         self.inputT = QTableWidget()
         self.inputT.setRowCount(1)
         self.inputT.setColumnCount(6)
-        self.inputT.setDragDropMode(QAbstractItemView.DragDropMode.DragDrop)
+        
+        
+        
+        # connect callback
+        self.inputT.cellChanged.connect(self.inputT_cellChanged_callback)
+        
+        # set zero values
         for i in range(6):
             intNum = QTableWidgetItem()
             intNum.setData(0,0)
             self.inputT.setItem(0,i,intNum)
+            
+        # add contenx menu
+        self.inputT.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.inputT.customContextMenuRequested.connect(self.inputT_contextMenu)
 
         # set column widths
         widthVal = 60
@@ -471,14 +459,6 @@ class Widget(QWidget):
         self.motorAngleSB[5].editingFinished.connect(
             lambda: self.motorAngleSB_editingFinished_callback(5)
         )
-
-        # connect zero value button
-        self.setMotorAngleZeroPB[0].pressed.connect(lambda: self.setMotorAngleZeroPB_pressed_callback(0))
-        self.setMotorAngleZeroPB[1].pressed.connect(lambda: self.setMotorAngleZeroPB_pressed_callback(1))
-        self.setMotorAngleZeroPB[2].pressed.connect(lambda: self.setMotorAngleZeroPB_pressed_callback(2))
-        self.setMotorAngleZeroPB[3].pressed.connect(lambda: self.setMotorAngleZeroPB_pressed_callback(3))
-        self.setMotorAngleZeroPB[4].pressed.connect(lambda: self.setMotorAngleZeroPB_pressed_callback(4))
-        self.setMotorAngleZeroPB[5].pressed.connect(lambda: self.setMotorAngleZeroPB_pressed_callback(5))
 
         # connect max value button
         self.setMotorAngleMaxPB[0].pressed.connect(lambda: self.motorAngleSliders[0].setValue(self.maxMotorAngleSB[0].value()))
@@ -597,12 +577,6 @@ class Widget(QWidget):
         self.motorAngleSB[index].setMinimum(self.minMotorAngleSB[index].value())
         self.motorAngleSliders[index].setMinimum(self.minMotorAngleSB[index].value())
 
-    def setMotorAngleZeroPB_pressed_callback(self,index):
-        """checks to see if 0 is possible otherwise idk"""
-        logging.debug("setMotorAngleZeroPB called")
-        if self.minMotorAngleSB[index].value() < 0 and self.maxMotorAngleSB[index].value() > 0:
-            self.motorAngleSB[index].setValue(0)
-
     def maxMotorAngleSB_editingFinished_callback(self, index):
         """When max limits are changed"""
         logging.debug(f"maxMotorAngleSB called: {index}")
@@ -617,8 +591,9 @@ class Widget(QWidget):
         if self.serialObj is not None and self.serialObj.is_open:
             logging.debug(f"setMotorZero {index}")
             # command microcontroller to make zero
-            dataStr = b"zero " + str(index).encode() + b" \r"
-            self.serialObj.write(dataStr)
+            if self.serialObj is not None and self.serialObj.is_open:
+                dataStr = b"zero " + str(index).encode() + b" \r"
+                self.serialObj.write(dataStr)
 
             # set values to zero
             self.motorAngleSB[index].setValue(0)
@@ -705,7 +680,99 @@ class Widget(QWidget):
             intNum.setData(0,self.motorAngleSB[i].value())
             self.inputT.setItem(rows-1,i,intNum)
             
+    def inputT_cellChanged_callback(self,row,column):
+        """When values are changed in the table function is called to 
+        check if they are valid and not out of the scope """
+        logging.debug("inputT cellChanged")
         
+        # check against its limits
+        newVal = float(self.inputT.item(row,column).text())
+        if newVal > self.maxMotorAngleSB[column].value():
+            # clamp the value
+            newItem = QTableWidgetItem()
+            newItem.setData(0,self.maxMotorAngleSB[column].value())
+            self.inputT.setItem(row,column,newItem)
+            logging.debug("clamped to max")
+     
+        # clamp min value
+        if newVal < self.minMotorAngleSB[column].value():
+            # clamp the value
+            newItem = QTableWidgetItem()
+            newItem.setData(0,self.minMotorAngleSB[column].value())
+            self.inputT.setItem(row,column,newItem)
+            logging.debug("clamped to min")
+        
+    def removeRowPB_callback(self):
+        """removes a row from the instruction table (instT)"""
+        if self.inputT.rowCount() > 1:
+            self.inputT.setRowCount(self.inputT.rowCount() - 1)
+            
+            
+    def inputT_contextMenu(self,position):
+        context_menu = QMenu()
+        
+        add_row_action = context_menu.addAction("Add Row")
+        delete_row_action = context_menu.addAction("Delete Row")
+        duplicate_row_action = context_menu.addAction("Duplicate Row")
+        paste_max_action = context_menu.addAction("Paste Max's")
+        paste_min_action = context_menu.addAction("Paste Min's")
+        action = context_menu.exec(self.inputT.viewport().mapToGlobal(position))
+        
+        if action == add_row_action:
+            self.addRowPB_pressed_callback()
+        elif action == delete_row_action:
+            self.inputT_CM_delete_row()
+        elif action == duplicate_row_action:
+            self.inputT_CM_duplicate_row()
+        elif action == paste_max_action:
+            self.inputT_CM_paste_max()
+        elif action == paste_min_action:
+            self.inputT_CM_paste_min()
+
+    def inputT_CM_delete_row(self):
+        """For context menu will delete the row that is selected"""
+        if self.inputT.currentRow() >= 0:
+            # remove the row
+            self.inputT.removeRow(self.inputT.currentRow())
+            logging.debug("inputT_CM_delete_row ")
+        
+    def inputT_CM_duplicate_row(self):
+        """For context menu will duplicate the selected line"""
+        selected_row = self.inputT.currentRow()
+        num_rows = self.inputT.rowCount()
+        
+        if selected_row >= 0:
+            # duplicate lines
+            if selected_row >= 0:
+                row_items = [self.inputT.item(selected_row, col).text() for col in range(self.inputT.columnCount())]
+                self.inputT.setRowCount(num_rows + 1)
+                
+                for col, text in enumerate(row_items):
+                    newItem = QTableWidgetItem()
+                    newItem.setData(0,float(text))
+                    self.inputT.setItem(num_rows, col, newItem)
+                    
+    def inputT_CM_paste_max(self):
+        """pastes the max values into the row from the spinner box"""
+        selected_row = self.inputT.currentRow()
+        
+        if selected_row >= 0:
+            logging.debug("inputT CM past max")
+            for col, maxSpinner in enumerate(self.maxMotorAngleSB):
+                newItem = QTableWidgetItem()
+                newItem.setData(0,float(maxSpinner.value()))
+                self.inputT.setItem(selected_row,col,newItem)
+        
+    def inputT_CM_paste_min(self):
+        """pastes the min values into the row from the spinner box"""
+        selected_row = self.inputT.currentRow()
+        
+        if selected_row >= 0:
+            logging.debug("inputT CM paste min")
+            for col, minSpinner in enumerate(self.minMotorAngleSB):
+                newItem = QTableWidgetItem()
+                newItem.setData(0,float(minSpinner.value()))
+                self.inputT.setItem(selected_row,col,newItem)
     # ---------------------------------------------------------------------------------
     # serial stuff
     def searchSerialPB_callback(self):
@@ -814,10 +881,6 @@ class Widget(QWidget):
     def serialThread_emit_callback(self,dataIn):
         self.serialOutputTE.append(dataIn)
         
-    def removeRowPB_callback(self):
-        """removes a row from the instruction table (instT)"""
-        if self.inputT.rowCount() > 1:
-            self.inputT.setRowCount(self.inputT.rowCount() - 1)
 
     def enableWidgets(self, isEnabled):
         """enables or disables all the widgets"""
