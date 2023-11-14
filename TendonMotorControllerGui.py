@@ -37,6 +37,10 @@ class Widget(QWidget):
     instructionThread = None
     instructionThreadRunning = False
     
+    row2 = None
+    allMotorsBox = None
+    instructionsBox = None
+    
     def __init__(self):
         QWidget.__init__(self)
         self.setGeometry(0, 0, 400, 400)
@@ -54,6 +58,8 @@ class Widget(QWidget):
 
         # add mapped instruction box
         self.add_allMotor_and_instruction_box()
+        
+        self.enableWidgets(False)
 
         # set final layout
         self.setLayout(self.mainVerticalLayout)
@@ -246,6 +252,7 @@ class Widget(QWidget):
 
         # add to motor control layout
         motorControlGB.setLayout(hLay)
+        self.row2 = motorControlGB
 
         # push to main vertical layout
         self.mainVerticalLayout.addWidget(motorControlGB)
@@ -311,6 +318,7 @@ class Widget(QWidget):
 
         allMotorGB.setLayout(allMotorVLay)
         allMotorGB.setFixedWidth(250)
+        self.allMotorsBox = allMotorGB
         rowLay.addWidget(allMotorGB)
 
         # connect callbacks
@@ -410,10 +418,10 @@ class Widget(QWidget):
 
         instGB.setLayout(instHLay)
         rowLay.addWidget(instGB)
+        
+        self.instructionsBox = instGB
 
         self.mainVerticalLayout.addLayout(rowLay)
-
-        self.allMaxMotorAngleSB
 
     # ---------------------------------------------------------------------------------
     # individual motor control setup
@@ -885,6 +893,9 @@ class Widget(QWidget):
     def enableWidgets(self, isEnabled):
         """enables or disables all the widgets"""
         logging.debug(f"enableWidgets {isEnabled} called")
+        self.row2.setEnabled(isEnabled)
+        self.instructionsBox.setEnabled(isEnabled)
+        self.allMotorsBox.setEnabled(isEnabled)
 
     def closeEvent(self, event):
         """When QtPy gets the request to close window, function makes sure
